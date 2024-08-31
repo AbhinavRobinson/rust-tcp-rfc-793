@@ -7,6 +7,9 @@ fn main() -> io::Result<()> {
         let nbytes = nic.recv(&mut buf[..])?;
         let flags = u16::from_be_bytes([buf[0], buf[1]]);
         let proto = u16::from_be_bytes([buf[2], buf[3]]);
+        if proto != 0x0800 {
+            continue;
+        }
         eprintln!(
             "Read {} (flags: {:x}, proto: {:x}): {:x?}",
             nbytes - 4,
