@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tun2 = { version = "2", features = ["async"] }
+tun-tap = "0.1.4"
