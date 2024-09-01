@@ -7,7 +7,7 @@ pub enum State {
     Estab,
 }
 
-pub struct SendSequence {
+pub struct SendSequenceSpace {
     una: usize,
     nxt: usize,
     wnd: usize,
@@ -17,14 +17,26 @@ pub struct SendSequence {
     iss: usize,
 }
 
+pub struct RecvSequenceSpace {
+    nxt: usize,
+    wnd: usize,
+    up: bool,
+    ira: usize,
+}
+
 pub struct Connection {
     state: State,
+    send: SendSequenceSpace,
+    recv: RecvSequenceSpace,
 }
 
 impl Default for Connection {
     fn default() -> Self {
         Connection {
-            state: State::Listen, // first impl, keeping default tcp state LISTEN
+            // first impl, keeping default tcp state LISTEN
+            state: State::Listen,
+            send: todo!(),
+            recv: todo!(),
         }
     }
 }
