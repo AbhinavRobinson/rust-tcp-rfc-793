@@ -1,8 +1,17 @@
-use std::io;
+use std::{collections::HashMap, io, net::Ipv4Addr};
+
+mod tcp;
+
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy)]
+struct Quad {
+    src: (Ipv4Addr, u16),
+    dst: (Ipv4Addr, u16),
+}
 
 fn main() -> io::Result<()> {
+    let mut connections: HashMap<Quad, tcp::State> = Default::default();
     let network_interface =
-        tun_tap::Iface::new("tun0", tun_tap::Mode::Tun).expect("Failed to create Tun interface.");
+        tun_tap::Iface::new("tun0", tun_tap::Mode::Tun).expect("Failed to create Tun interface."); // Linux only
     let mut buffer = [0u8; 1504];
     loop {
         let network_bytes = network_interface
@@ -10,41 +19,32 @@ fn main() -> io::Result<()> {
             .expect("Failed to read network bytes.");
         let ether_protocol = u16::from_be_bytes([buffer[2], buffer[3]]);
         if ether_protocol != 0x0800 {
-            // ignore packets other than ipv4
-            continue;
+            continue; // ignore packets other than ipv4
         }
-        match etherparse::Ipv4Slice::from_slice(&buffer[4..network_bytes]) {
-            Ok(p) => {
-                let header = p.header();
-                let payload_len = header.payload_len().expect("Error parsing payload lenght.");
-                let source_addr = header.source_addr();
-                let destination_addr = header.destination_addr();
-                let protocol = header.protocol();
-                let ttl = header.ttl();
-                eprintln!(
-                    "{} → {} Read {:x} bytes of proto: {:?} ttl: {:x}",
-                    source_addr, destination_addr, payload_len, protocol, ttl,
-                );
-                if protocol != etherparse::IpNumber(0x06) {
-                    // ignore packets other than tcp
-                    continue;
+        match etherparse::Ipv4HeaderSlice::from_slice(&buffer[4..network_bytes]) {
+            Ok(ip_header) => {
+                if ip_header.protocol() != etherparse::IpNumber(0x06) {
+                    continue; // ignore packets other than tcp
                 }
-                let slice_len = p.header().slice().len();
-                match etherparse::TcpHeaderSlice::from_slice(&buffer[4 + slice_len..]) {
-                    Ok(h) => {
-                        let destination_port = h.destination_port();
-                        eprintln!(
-                            "{} → {} Read {:x} bytes of TCP to port: {}",
-                            source_addr, destination_addr, slice_len, destination_port,
-                        );
+                match etherparse::TcpHeaderSlice::from_slice(&buffer[4 + ip_header.slice().len()..])
+                {
+                    Ok(tcp_header) => {
+                        let data_from = 4 + ip_header.slice().len() + tcp_header.slice().len(); // data start point = (headers) + offset
+                        connections
+                            .entry(Quad {
+                                src: (ip_header.source_addr(), tcp_header.source_port()),
+                                dst: (ip_header.destination_addr(), tcp_header.destination_port()),
+                            })
+                            .or_default()
+                            .on_packet(ip_header, tcp_header, &buffer[data_from..]);
                     }
                     Err(e) => {
-                        eprintln!("Errored Tcp packet {:?}", e)
+                        eprintln!("Errored parsing TCP packet {:?}", e)
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Errored packet {:?}", e)
+                eprintln!("Errored parsing IP packet {:?}", e)
             }
         }
     }
