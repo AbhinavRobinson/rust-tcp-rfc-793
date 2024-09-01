@@ -26,8 +26,9 @@ fn main() -> io::Result<()> {
                 if ip_header.protocol() != etherparse::IpNumber(0x06) {
                     continue; // ignore packets other than tcp
                 }
-                match etherparse::TcpHeaderSlice::from_slice(&buffer[4 + ip_header.slice().len()..])
-                {
+                match etherparse::TcpHeaderSlice::from_slice(
+                    &buffer[4 + ip_header.slice().len()..network_bytes],
+                ) {
                     Ok(tcp_header) => {
                         let data_from = 4 + ip_header.slice().len() + tcp_header.slice().len(); // data start point = (headers) + offset
                         connections
@@ -36,7 +37,7 @@ fn main() -> io::Result<()> {
                                 dst: (ip_header.destination_addr(), tcp_header.destination_port()),
                             })
                             .or_default()
-                            .on_packet(ip_header, tcp_header, &buffer[data_from..]);
+                            .on_packet(ip_header, tcp_header, &buffer[data_from..network_bytes]);
                     }
                     Err(e) => {
                         eprintln!("Errored parsing TCP packet {:?}", e)
