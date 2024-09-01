@@ -98,6 +98,9 @@ impl Connection {
             ip_header.source(),
         )
         .expect("Failed to create SYN ipv4 packet");
+        syn_ack.checksum = syn_ack
+            .calc_checksum_ipv4(&ip, &[])
+            .expect("failed to calc checksum");
         let unwritten = {
             let mut unwritten = &mut buffer[..];
             let _ = ip.write(&mut unwritten);
@@ -115,6 +118,6 @@ impl Connection {
         _tcp_header: TcpHeaderSlice<'a>,
         _data: &'a [u8],
     ) -> std::io::Result<()> {
-        unimplemented!()
+        Ok(())
     }
 }
