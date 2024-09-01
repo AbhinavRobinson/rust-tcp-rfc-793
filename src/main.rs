@@ -21,7 +21,24 @@ fn main() -> io::Result<()> {
                 eprintln!(
                     "{} → {} Read {:x} bytes of proto: {:?} ttl: {:x}",
                     source_addr, destination_addr, payload_len, protocol, ttl,
-                )
+                );
+                if protocol != etherparse::IpNumber(0x06) {
+                    // ignore packets other than tcp
+                    continue;
+                }
+                let slice_len = p.header().slice().len();
+                match etherparse::TcpHeaderSlice::from_slice(&buffer[4 + slice_len..]) {
+                    Ok(h) => {
+                        let destination_port = h.destination_port();
+                        eprintln!(
+                            "{} → {} Read {:x} bytes of TCP to port: {}",
+                            source_addr, destination_addr, slice_len, destination_port,
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Errored Tcp packet {:?}", e)
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("Errored packet {:?}", e)
