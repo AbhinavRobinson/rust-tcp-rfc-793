@@ -5,7 +5,6 @@ fn main() -> io::Result<()> {
     let mut buffer = [0u8; 1504];
     loop {
         let network_bytes = network_interface.recv(&mut buffer[..])?;
-        // let flags = u16::from_be_bytes([buffer[0], buffer[1]]);
         let ether_protocol = u16::from_be_bytes([buffer[2], buffer[3]]);
         if ether_protocol != 0x0800 {
             // ignore packets other than ipv4
@@ -14,17 +13,14 @@ fn main() -> io::Result<()> {
         match etherparse::Ipv4Slice::from_slice(&buffer[4..network_bytes]) {
             Ok(p) => {
                 let header = p.header();
+                let payload_len = header.payload_len().expect("Error parsing payload len");
                 let source_addr = header.source_addr();
                 let destination_addr = header.destination_addr();
                 let protocol = header.protocol();
                 let ttl = header.ttl();
                 eprintln!(
-                    "{} -> {} Read {:x} bytes of proto: {:?} ttl: {}",
-                    source_addr,
-                    destination_addr,
-                    network_bytes - 4,
-                    protocol,
-                    ttl,
+                    "{} → {} Read {:x} bytes of proto: {:?} ttl: {:x}",
+                    source_addr, destination_addr, payload_len, protocol, ttl,
                 )
             }
             Err(e) => {
