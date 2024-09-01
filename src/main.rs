@@ -3,14 +3,14 @@ use std::{collections::HashMap, io, net::Ipv4Addr};
 mod tcp;
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy)]
-struct Quad {
+struct IPQuad {
     src: (Ipv4Addr, u16),
     dst: (Ipv4Addr, u16),
 }
 
 fn main() -> io::Result<()> {
-    let mut connections: HashMap<Quad, tcp::State> = Default::default();
-    let network_interface =
+    let mut connections: HashMap<IPQuad, tcp::Connection> = Default::default();
+    let mut network_interface =
         tun_tap::Iface::new("tun0", tun_tap::Mode::Tun).expect("Failed to create Tun interface."); // Linux only
     let mut buffer = [0u8; 1504];
     loop {
@@ -32,12 +32,17 @@ fn main() -> io::Result<()> {
                     Ok(tcp_header) => {
                         let data_from = 4 + ip_header.slice().len() + tcp_header.slice().len(); // data start point = (headers) + offset
                         connections
-                            .entry(Quad {
+                            .entry(IPQuad {
                                 src: (ip_header.source_addr(), tcp_header.source_port()),
                                 dst: (ip_header.destination_addr(), tcp_header.destination_port()),
                             })
                             .or_default()
-                            .on_packet(ip_header, tcp_header, &buffer[data_from..network_bytes]);
+                            .on_packet(
+                                &mut network_interface,
+                                ip_header,
+                                tcp_header,
+                                &buffer[data_from..network_bytes],
+                            )?;
                     }
                     Err(e) => {
                         eprintln!("Errored parsing TCP packet {:?}", e)
