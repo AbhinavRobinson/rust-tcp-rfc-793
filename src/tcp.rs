@@ -54,12 +54,11 @@ impl Connection {
     ) -> std::io::Result<Option<Self>> {
         let mut buffer = [0u8; 1504];
         if !tcp_header.syn() {
-            // Only accept SYN Packet
+            // Only accept SYN Packet for new connection
             return Ok(None);
         }
         Connection::debug_print(&ip_header, &tcp_header, data);
-
-        // should technically be "random"
+        // @dev should technically be "random"
         let iss = 0;
         let connection = Connection {
             state: State::SynRcvd,
@@ -80,8 +79,9 @@ impl Connection {
                 up: false,
             },
         };
-
-        // Build and Send ACK
+        //
+        // Build ACK Packet
+        //
         let mut syn_ack = TcpHeader::new(
             tcp_header.destination_port(),
             tcp_header.source_port(),
@@ -91,6 +91,9 @@ impl Connection {
         syn_ack.acknowledgment_number = connection.recv.nxt;
         syn_ack.syn = true;
         syn_ack.ack = true;
+        //
+        // Build IPv4 Header
+        //
         let ip = Ipv4Header::new(
             syn_ack.header_len_u16(),
             64,
@@ -99,23 +102,30 @@ impl Connection {
             ip_header.source(),
         )
         .expect("Failed to create SYN ipv4 packet");
-
+        //
         // Compute checksum
+        //
         syn_ack.checksum = syn_ack
             .calc_checksum_ipv4(&ip, &[])
             .expect("failed to calc checksum");
-
-        // Writer
+        //
+        // Response Writer
+        //
         let unwritten = {
             let mut unwritten = &mut buffer[..];
             let _ = ip.write(&mut unwritten);
             let _ = syn_ack.write(&mut unwritten);
             unwritten.len()
         };
+        //
+        // Send ACK Reponse
+        //
         let _ = network_interface.send(&buffer[..unwritten]);
         Ok(Some(connection))
     }
 
+    // TODO
+    // Handle ACK (3rd Handshake) Packet and FIN (Close connection) Packet
     pub fn on_packet<'a>(
         &mut self,
         _network_interface: &mut tun_tap::Iface,
