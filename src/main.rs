@@ -60,9 +60,7 @@ fn main() -> io::Result<()> {
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("Errored parsing IP packet {:?}", e)
-            }
+            Err(..) => (),
         }
     }
 }

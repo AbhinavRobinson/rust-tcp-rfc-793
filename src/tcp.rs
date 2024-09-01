@@ -58,6 +58,7 @@ impl Connection {
             return Ok(None);
         }
         Connection::debug_print(&ip_header, &tcp_header, data);
+
         // should technically be "random"
         let iss = 0;
         let connection = Connection {
@@ -98,9 +99,13 @@ impl Connection {
             ip_header.source(),
         )
         .expect("Failed to create SYN ipv4 packet");
+
+        // Compute checksum
         syn_ack.checksum = syn_ack
             .calc_checksum_ipv4(&ip, &[])
             .expect("failed to calc checksum");
+
+        // Writer
         let unwritten = {
             let mut unwritten = &mut buffer[..];
             let _ = ip.write(&mut unwritten);
