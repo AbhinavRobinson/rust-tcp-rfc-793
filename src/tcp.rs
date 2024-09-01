@@ -1,44 +1,33 @@
 use etherparse::{IpNumber, Ipv4Header, Ipv4HeaderSlice, TcpHeader, TcpHeaderSlice};
 
 pub enum State {
-    Closed,
-    Listen,
+    // Closed,
+    // Listen,
     SynRcvd,
-    Estab,
+    // Estab,
 }
 
 pub struct SendSequenceSpace {
-    una: usize,
-    nxt: usize,
-    wnd: usize,
+    una: u32,
+    nxt: u32,
+    wnd: u16,
     up: bool,
-    wl1: usize,
-    wl2: usize,
-    iss: usize,
+    wl1: u16,
+    wl2: u16,
+    iss: u32,
 }
 
 pub struct RecvSequenceSpace {
-    nxt: usize,
-    wnd: usize,
+    nxt: u32,
+    wnd: u16,
     up: bool,
-    ira: usize,
+    irs: u32,
 }
 
 pub struct Connection {
     state: State,
     send: SendSequenceSpace,
     recv: RecvSequenceSpace,
-}
-
-impl Default for Connection {
-    fn default() -> Self {
-        Connection {
-            // first impl, keeping default tcp state LISTEN
-            state: State::Listen,
-            send: todo!(),
-            recv: todo!(),
-        }
-    }
 }
 
 impl Connection {
@@ -57,50 +46,75 @@ impl Connection {
         );
     }
 
-    pub fn on_packet<'a>(
-        &mut self,
+    pub fn accept<'a>(
         network_interface: &mut tun_tap::Iface,
         ip_header: Ipv4HeaderSlice<'a>,
         tcp_header: TcpHeaderSlice<'a>,
         data: &'a [u8],
-    ) -> std::io::Result<usize> {
+    ) -> std::io::Result<Option<Self>> {
         let mut buffer = [0u8; 1504];
-        match self.state {
-            State::Closed => Ok(0),
-            State::Listen => {
-                if !tcp_header.syn() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::ConnectionRefused,
-                        "",
-                    ));
-                }
-                Connection::debug_print(&ip_header, &tcp_header, data);
-                let mut syn_ack = TcpHeader::new(
-                    tcp_header.destination_port(),
-                    tcp_header.source_port(),
-                    0,
-                    0,
-                );
-                syn_ack.syn = true;
-                syn_ack.ack = true;
-                let ip = Ipv4Header::new(
-                    syn_ack.header_len_u16(),
-                    64,
-                    IpNumber::TCP,
-                    ip_header.destination(),
-                    ip_header.source(),
-                )
-                .expect("Failed to create SYN ipv4 packet");
-                let unwritten = {
-                    let mut unwritten = &mut buffer[..];
-                    let _ = ip.write(&mut unwritten);
-                    let _ = syn_ack.write(&mut unwritten);
-                    unwritten.len()
-                };
-                network_interface.send(&buffer[..unwritten])
-            }
-            State::SynRcvd => Ok(0),
-            State::Estab => Ok(0),
+        if !tcp_header.syn() {
+            // Only accept SYN Packet
+            return Ok(None);
         }
+        Connection::debug_print(&ip_header, &tcp_header, data);
+        // should technically be "random"
+        let iss = 0;
+        let connection = Connection {
+            state: State::SynRcvd,
+            send: SendSequenceSpace {
+                iss,
+                una: iss,
+                nxt: iss + 1,
+                wnd: 10,
+                up: false,
+                // DUNNO YET
+                wl1: 0,
+                wl2: 0,
+            },
+            recv: RecvSequenceSpace {
+                irs: tcp_header.sequence_number(),
+                nxt: tcp_header.sequence_number() + 1,
+                wnd: tcp_header.window_size(),
+                up: false,
+            },
+        };
+
+        // Build and Send ACK
+        let mut syn_ack = TcpHeader::new(
+            tcp_header.destination_port(),
+            tcp_header.source_port(),
+            connection.send.iss,
+            connection.send.wnd,
+        );
+        syn_ack.acknowledgment_number = connection.recv.nxt;
+        syn_ack.syn = true;
+        syn_ack.ack = true;
+        let ip = Ipv4Header::new(
+            syn_ack.header_len_u16(),
+            64,
+            IpNumber::TCP,
+            ip_header.destination(),
+            ip_header.source(),
+        )
+        .expect("Failed to create SYN ipv4 packet");
+        let unwritten = {
+            let mut unwritten = &mut buffer[..];
+            let _ = ip.write(&mut unwritten);
+            let _ = syn_ack.write(&mut unwritten);
+            unwritten.len()
+        };
+        let _ = network_interface.send(&buffer[..unwritten]);
+        Ok(Some(connection))
+    }
+
+    pub fn on_packet<'a>(
+        &mut self,
+        _network_interface: &mut tun_tap::Iface,
+        _ip_header: Ipv4HeaderSlice<'a>,
+        _tcp_header: TcpHeaderSlice<'a>,
+        _data: &'a [u8],
+    ) -> std::io::Result<()> {
+        unimplemented!()
     }
 }

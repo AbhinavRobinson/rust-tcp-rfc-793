@@ -1,4 +1,8 @@
-use std::{collections::HashMap, io, net::Ipv4Addr};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    io,
+    net::Ipv4Addr,
+};
 
 mod tcp;
 
@@ -31,18 +35,29 @@ fn main() -> io::Result<()> {
                 ) {
                     Ok(tcp_header) => {
                         let data_from = 4 + ip_header.slice().len() + tcp_header.slice().len(); // data start point = (headers) + offset
-                        connections
-                            .entry(IPQuad {
-                                src: (ip_header.source_addr(), tcp_header.source_port()),
-                                dst: (ip_header.destination_addr(), tcp_header.destination_port()),
-                            })
-                            .or_default()
-                            .on_packet(
-                                &mut network_interface,
-                                ip_header,
-                                tcp_header,
-                                &buffer[data_from..network_bytes],
-                            )?;
+                        match connections.entry(IPQuad {
+                            src: (ip_header.source_addr(), tcp_header.source_port()),
+                            dst: (ip_header.destination_addr(), tcp_header.destination_port()),
+                        }) {
+                            Entry::Occupied(mut c) => {
+                                let _ = c.get_mut().on_packet(
+                                    &mut network_interface,
+                                    ip_header,
+                                    tcp_header,
+                                    &buffer[data_from..network_bytes],
+                                );
+                            }
+                            Entry::Vacant(e) => {
+                                if let Some(c) = tcp::Connection::accept(
+                                    &mut network_interface,
+                                    ip_header,
+                                    tcp_header,
+                                    &buffer[data_from..network_bytes],
+                                )? {
+                                    e.insert(c);
+                                };
+                            }
+                        }
                     }
                     Err(e) => {
                         eprintln!("Errored parsing TCP packet {:?}", e)
