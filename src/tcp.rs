@@ -126,8 +126,6 @@ impl Connection {
         Ok(Some(connection))
     }
 
-    // TODO
-    // Handle ACK (3rd Handshake) Packet and FIN (Close connection) Packet
     pub fn on_packet<'a>(
         &mut self,
         network_interface: &mut tun_tap::Iface,
@@ -135,6 +133,32 @@ impl Connection {
         tcp_header: TcpHeaderSlice<'a>,
         data: &'a [u8],
     ) -> std::io::Result<()> {
+        // Do acceptable ACK check
+        // UNA < ACK =< NXT concidering wrapping arithmatic
+        let ackn = tcp_header.acknowledgment_number();
+        let unan = self.send.una;
+        let nxtn = self.send.nxt;
+        if unan < ackn {
+            // VALID
+            // 0 ---- U ---- A ---- N ---- 0
+            // 0 ---- N ---- U ---- A ---- 0
+            //
+            // INVALID
+            // 0 ---- U ---- N ---- A ---- 0
+            if unan <= nxtn && nxtn < ackn {
+                // NOT OK
+            }
+        } else {
+            // VALID
+            // 0 ---- A ---- N ---- U ---- 0
+            //
+            // INVALID
+            // 0 ---- A ---- U ---- N ---- 0
+            if ackn <= unan && unan < nxtn {
+                // NOT OK
+            }
+        }
+
         match self.state {
             State::SynRcvd => Ok(()),
             State::Estab => {
