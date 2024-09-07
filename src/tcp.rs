@@ -146,7 +146,8 @@ impl Connection {
             // INVALID
             // 0 ---- U ---- N ---- A ---- 0
             if unan <= nxtn && nxtn < ackn {
-                // NOT OK
+                // Ignore connection
+                return Ok(());
             }
         } else {
             // VALID
@@ -155,7 +156,8 @@ impl Connection {
             // INVALID
             // 0 ---- A ---- U ---- N ---- 0
             if ackn <= unan && unan < nxtn {
-                // NOT OK
+                // Ignore connection
+                return Ok(());
             }
         }
 
