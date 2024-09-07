@@ -28,6 +28,7 @@ pub struct Connection {
     state: State,
     send: SendSequenceSpace,
     recv: RecvSequenceSpace,
+    ip: Ipv4Header,
 }
 
 impl Connection {
@@ -60,7 +61,7 @@ impl Connection {
         Connection::debug_print(&ip_header, &tcp_header, data);
         // @dev should technically be "random"
         let iss = 0;
-        let connection = Connection {
+        let mut connection = Connection {
             state: State::SynRcvd,
             send: SendSequenceSpace {
                 iss,
@@ -78,6 +79,14 @@ impl Connection {
                 wnd: tcp_header.window_size(),
                 up: false,
             },
+            ip: Ipv4Header::new(
+                0,
+                64,
+                IpNumber::TCP,
+                ip_header.destination(),
+                ip_header.source(),
+            )
+            .expect("Failed to create SYN ipv4 packet"),
         };
         //
         // Build ACK Packet
@@ -92,28 +101,21 @@ impl Connection {
         syn_ack.syn = true;
         syn_ack.ack = true;
         //
-        // Build IPv4 Header
+        // Set Ip header length
         //
-        let ip = Ipv4Header::new(
-            syn_ack.header_len_u16(),
-            64,
-            IpNumber::TCP,
-            ip_header.destination(),
-            ip_header.source(),
-        )
-        .expect("Failed to create SYN ipv4 packet");
+        let _ = connection.ip.set_payload_len(syn_ack.header_len() + 0);
         //
         // Compute checksum
         //
         syn_ack.checksum = syn_ack
-            .calc_checksum_ipv4(&ip, &[])
+            .calc_checksum_ipv4(&connection.ip, &[])
             .expect("failed to calc checksum");
         //
         // Response Writer
         //
         let unwritten = {
             let mut unwritten = &mut buffer[..];
-            let _ = ip.write(&mut unwritten);
+            let _ = connection.ip.write(&mut unwritten);
             let _ = syn_ack.write(&mut unwritten);
             unwritten.len()
         };
