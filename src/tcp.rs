@@ -4,7 +4,7 @@ pub enum State {
     // Closed,
     // Listen,
     SynRcvd,
-    // Estab,
+    Estab,
 }
 
 pub struct SendSequenceSpace {
@@ -128,11 +128,16 @@ impl Connection {
     // Handle ACK (3rd Handshake) Packet and FIN (Close connection) Packet
     pub fn on_packet<'a>(
         &mut self,
-        _network_interface: &mut tun_tap::Iface,
-        _ip_header: Ipv4HeaderSlice<'a>,
-        _tcp_header: TcpHeaderSlice<'a>,
-        _data: &'a [u8],
+        network_interface: &mut tun_tap::Iface,
+        ip_header: Ipv4HeaderSlice<'a>,
+        tcp_header: TcpHeaderSlice<'a>,
+        data: &'a [u8],
     ) -> std::io::Result<()> {
-        Ok(())
+        match self.state {
+            State::SynRcvd => Ok(()),
+            State::Estab => {
+                unimplemented!()
+            }
+        }
     }
 }
